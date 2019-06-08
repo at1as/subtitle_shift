@@ -32,8 +32,8 @@ object MyApp extends App {
     |> sbt
     |> run \"-18.1 seconds\" /path/to/subtitles.srt""".stripMargin
 
-  val targetOffset   = Try(Duration(args(0))).getOrElse({ println("Invalid invocation. Run as $usage") ; sys.exit })
-  val filePath       = Try(args(1)).getOrElse({ println("Invalid invocation. Run as $usage") ; sys.exit })
+  val targetOffset   = Try(Duration(args(0))).getOrElse({ println(s"Invalid invocation. Run as $usage") ; sys.exit })
+  val filePath       = Try(args(1)).getOrElse({ println(s"Invalid invocation. Run as $usage") ; sys.exit })
   val outputFilePath = s"${filePath}-NEW"
 
   val fileLines      = File(filePath).lines
@@ -45,11 +45,11 @@ object MyApp extends App {
     case (hd, _)       => List(hd)
   }
 
-  def millisecondsToTimestamp(d: Long): String = {
-    val mil = "%03d".format(d % 1000)
-    val sec = "%02d".format((d / 1000) % 60)
-    val min = "%02d".format((d / 1000 / 60) % 60)
-    val hr  = ((d / 1000 / 60 / 60) % 60).toString.reverse.padTo(2, '0').reverse
+  def millisecondsToTimestamp(ms: Long): String = {
+    val mil = "%03d".format(ms % 1000)
+    val sec = "%02d".format((ms / 1000) % 60)
+    val min = "%02d".format((ms / 1000 / 60) % 60)
+    val hr  = ((ms / 1000 / 60 / 60) % 60).toString.reverse.padTo(2, '0').reverse
     
     s"$hr:$min:$sec,$mil"
   }
@@ -71,11 +71,11 @@ object MyApp extends App {
   val subtitleBlocks = for {
     subGroup        <- subtitleGroups
     index           <- subGroup
-                          .headOption
-                          .map(_.replaceAll("[^0-9]", "").toInt)
+                        .headOption
+                        .map(_.replaceAll("[^0-9]", "").toInt)
     timeStamp       <- subGroup
-                          .drop(1)
-                          .headOption
+                        .drop(1)
+                        .headOption
   
     ts               = extractTimestampsAsMillis(timeStamp)
     shiftedStartTime = millisecondsToTimestamp(ts(0) + targetOffset.toMillis)
@@ -83,11 +83,18 @@ object MyApp extends App {
     newTimestamp     = Timestamp(shiftedStartTime, shiftedEndTime)
 
     msgs             =  subGroup.drop(2)
-  } yield (Subtitle.apply _).tupled((index, newTimestamp.toString, msgs))
+  } yield {
+    (Subtitle.apply _).tupled((index, newTimestamp.toString, msgs))
+  }
 
-  val shiftedSubtitleBlocks = subtitleBlocks
-                                .map(x => s"${x.index}\n${x.timestamp}\n${x.text.mkString("\n")}\n")
+  val shiftedSubtitleBlocks = subtitleBlocks.map(x => Seq[String](
+                                                        x.index.toString,
+                                                        x.timestamp,
+                                                        x.text.mkString("\n")
+                                                      ).mkString("\n") ++ "\n")
 
   scala.reflect.io.File(outputFilePath).writeAll(shiftedSubtitleBlocks.mkString("\n"))
+
+  println(s"New subtitle written to: $outputFilePath")
 }
 
